@@ -1,0 +1,11 @@
+test-media/
+*.mp4
+*.m4v
+*.mov
+*.mkv
+.DS_Store
+.claude/
+*.srt
+*.ass
+*.ssa
+*.vtt

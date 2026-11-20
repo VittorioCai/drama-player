@@ -876,6 +876,8 @@ const IC = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4L19 12z" fill="currentColor"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   film: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m10 9.2 5 2.8-5 2.8z" fill="currentColor"/></svg>',
+  fs: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  fsExit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v3.5A1.5 1.5 0 0 1 7.5 9H4M20 9h-3.5A1.5 1.5 0 0 1 15 7.5V4M15 20v-3.5a1.5 1.5 0 0 1 1.5-1.5H20M4 15h3.5A1.5 1.5 0 0 1 9 16.5V20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
   loop: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 function thumbHTML(ep, big) {
@@ -1202,13 +1204,15 @@ async function leavePlayer(toLibrary = true) {
   if (P.ep) { saveNow(); }
   video.pause();
   cancelAnimationFrame(P.raf); P.raf = 0;
+  [...video.querySelectorAll('track')].forEach(t => { URL.revokeObjectURL(t.src); t.remove(); });
   video.removeAttribute('src'); video.load();
   if (P.url) { URL.revokeObjectURL(P.url); P.url = ''; }
   P.ep = null; P.loop = null;
   keepAwake(false);
   closePops();
   if (toLibrary) {
-    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) video.webkitExitFullscreen();
     $('#view-player').hidden = true; $('#view-library').hidden = false;
     renderLibrary();
   }
@@ -1389,8 +1393,8 @@ function renderTools() {
   $('#btn-speed').textContent = `${video.playbackRate}×`;
   $('#lbl-back10').textContent = $('#lbl-fwd10').textContent = prefs.step;
   $('#btn-list').setAttribute('aria-pressed', !$('#transcript').hidden);
-  const canFS = !isStandalone() && !!(stage.parentElement.requestFullscreen || stage.parentElement.webkitRequestFullscreen);
-  $('#btn-fs').hidden = !canFS;
+  $('#btn-fs').hidden = !canFullscreen();
+  renderFsButton();
 }
 function renderSettings() {
   $$('#size-seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.size === prefs.size));
@@ -1418,7 +1422,6 @@ function positionMask() {
   stage.style.setProperty('--sub-bottom', Math.max(H - top - ph + band * .12, 8) + 'px');
 }
 new ResizeObserver(() => positionMask()).observe(stage);
-const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
 // ---------- chrome (controls overlay) ----------
 function showChrome(autoHide = true) {
@@ -1519,11 +1522,54 @@ function shiftOffset(d) {
   if (P.loop) P.loop = loopFor(P.loop.i);
   renderSettings(); renderTranscript(); renderSub(true);
 }
+// Fullscreen: prefer element fullscreen (keeps our subtitles, gestures and transcript; hides the iPad status bar,
+// including in home-screen mode). If the page can't do that, fall back to the system video player with our
+// subtitles handed over as a WebVTT track.
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+const canFullscreen = () => { const el = $('#view-player'); return !!(el.requestFullscreen || el.webkitRequestFullscreen || video.webkitEnterFullscreen); };
 function toggleFullscreen() {
   const el = $('#view-player');
-  if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-  else { const req = el.requestFullscreen || el.webkitRequestFullscreen; if (req) Promise.resolve(req.call(el)).catch(() => toast('这里不能全屏。添加到主屏幕后打开就是全屏。')); }
+  if (fsElement()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) { nativeFullscreen(); return; }
+  let p;
+  try { p = req.call(el); } catch (e) { p = Promise.reject(e); }
+  Promise.resolve(p).catch(nativeFullscreen);
 }
+function vttTime(t) {
+  t = Math.max(0, t);
+  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = (t % 60).toFixed(3).padStart(6, '0');
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${s}`;
+}
+function setNativeTrack() {
+  [...video.querySelectorAll('track')].forEach(t => { URL.revokeObjectURL(t.src); t.remove(); });
+  const mode = prefs.subMode;
+  if (!P.cues.length || mode === 'off') return;
+  const o = off();
+  const body = P.cues.map(c => {
+    const lines = [mode !== 'zh' && c.en, mode !== 'en' && c.zh].filter(Boolean).join('\n');
+    return lines ? `${vttTime(c.s + o)} --> ${vttTime(c.e + o)}\n${lines.replace(/-->/g, '→')}\n` : '';
+  }).filter(Boolean).join('\n');
+  const tr = document.createElement('track');
+  tr.kind = 'subtitles'; tr.label = '字幕'; tr.srclang = 'en'; tr.default = true;
+  tr.src = URL.createObjectURL(new Blob(['WEBVTT\n\n' + body], { type: 'text/vtt' }));
+  video.appendChild(tr);
+  tr.track.mode = 'showing';
+}
+function nativeFullscreen() {
+  if (!video.webkitEnterFullscreen) { toast('这个浏览器不能全屏播放。'); return; }
+  setNativeTrack();
+  try { video.webkitEnterFullscreen(); } catch (e) { toast('这个浏览器不能全屏播放。'); }
+}
+function renderFsButton() {
+  const b = $('#btn-fs'), on = !!fsElement();
+  b.innerHTML = (on ? IC.fsExit : IC.fs) + (on ? '退出全屏' : '全屏');
+  b.setAttribute('aria-pressed', on);
+}
+['fullscreenchange', 'webkitfullscreenchange'].forEach(t => document.addEventListener(t, () => { renderFsButton(); positionMask(); }));
+video.addEventListener('webkitendfullscreen', () => {
+  [...video.querySelectorAll('track')].forEach(t => { if (t.track) t.track.mode = 'disabled'; });
+});
 function setMediaSession() {
   if (!('mediaSession' in navigator) || !P.ep) return;
   try {
@@ -1688,7 +1734,7 @@ document.addEventListener('keydown', e => {
     ' ': togglePlay, 'k': togglePlay,
     'ArrowLeft': () => seekBy(-5), 'ArrowRight': () => seekBy(5),
     'a': prevSentence, ',': prevSentence, 'd': nextSentence, '.': nextSentence,
-    'r': toggleLoop, 's': cycleSubMode, 'b': toggleBlind, 'l': toggleTranscript,
+    'r': toggleLoop, 's': cycleSubMode, 'f': toggleFullscreen, 'b': toggleBlind, 'l': toggleTranscript,
     '[': () => stepSpeed(-1), ']': () => stepSpeed(1),
     'Escape': () => (popOpen() ? closePops() : leavePlayer(true)),
   }[k];

@@ -4,7 +4,7 @@
 
 ## 在 iPad 上安装
 
-1. 用 Safari 打开播放器的网址。
+1. 用 Safari 打开 https://vittoriocai.github.io/drama-player/ 。
 2. 点分享按钮 → 「添加到主屏幕」。之后从主屏幕图标打开，全屏、离线可用。
 
 ## 导入

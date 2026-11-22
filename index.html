@@ -172,7 +172,8 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
   position: absolute; left: 0; right: 0; bottom: var(--sub-bottom, calc(env(safe-area-inset-bottom, 0px) + 5%));
   padding: 0 6%; text-align: center; pointer-events: none; transition: bottom .2s ease;
 }
-.stage.show-chrome .sub-layer { bottom: calc(env(safe-area-inset-bottom, 0px) + 136px); }
+/* With the controls showing, subtitles only rise as far as needed to clear them (--chrome-h is measured in JS). */
+.stage.show-chrome .sub-layer { bottom: max(var(--sub-bottom, calc(env(safe-area-inset-bottom, 0px) + 5%)), var(--chrome-h, 120px)); }
 .sub { display: inline-block; pointer-events: auto; font-size: var(--sub-size); line-height: 1.3; transition: filter .2s; }
 .sub .en, .sub .zh {
   display: block; white-space: pre-line; font-weight: 600;
@@ -210,11 +211,16 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .round svg { width: 26px; height: 26px; }
 .round.big { width: 80px; height: 80px; background: var(--fg); color: var(--bg); }
 .round.big svg { width: 36px; height: 36px; }
+.round[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.round.fs { width: 42px; height: 42px; }
+.round.fs svg { width: 22px; height: 22px; }
 .round .lbl { position: absolute; font: 700 10px/1 var(--font); margin-top: 3px; }
 .seekbtn { position: relative; }
 
 .timeline { display: flex; align-items: center; gap: 14px; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
-.timeline span { min-width: 52px; text-align: center; text-shadow: 0 1px 2px #000; }
+.timeline span, .timeline .time { min-width: 52px; text-align: center; text-shadow: 0 1px 2px #000; }
+.timeline .time { appearance: none; border: 0; background: none; padding: 0; min-height: 40px; min-width: 60px; font: inherit; color: inherit; cursor: pointer; }
+
 .scrub { position: relative; flex: 1; height: 40px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
 .scrub .track { position: absolute; left: 0; right: 0; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .2); overflow: hidden; transition: height .12s; }
 .scrub.dragging .track { height: 10px; border-radius: 5px; }
@@ -224,7 +230,15 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .scrub .knob { position: absolute; left: 0; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .6); transition: transform .12s; }
 .scrub.dragging .knob { transform: scale(1.25); }
 
-.tools { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+/* sentence bar: everything for studying one line at a time */
+.sentbar { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.sentbar .sent-no {
+  min-width: 118px; text-align: center; font-size: 14px; font-weight: 600; color: rgba(246, 238, 230, .8);
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000;
+}
+.sentbar .sent-no b { color: var(--fg); font-weight: 750; }
+.sentbar .sep { width: 1px; height: 22px; background: rgba(246, 238, 230, .2); margin: 0 6px; }
+#btn-prev { padding-left: 10px; } #btn-next { padding-right: 10px; }
 .chip {
   appearance: none; min-height: 42px; padding: 0 16px; border-radius: 999px; border: 0;
   background: var(--glass); color: #fff; font-weight: 600; font-size: 15px; cursor: pointer;
@@ -235,7 +249,6 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .chip:disabled { opacity: .4; }
 .chip.speed { min-width: 64px; justify-content: center; font-family: var(--display); font-weight: 800; }
-.tools .grow { flex: 1; }
 
 .pop {
   position: absolute; z-index: 3; pointer-events: auto; min-width: 300px; max-width: calc(100% - 32px);
@@ -271,7 +284,7 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .switch input:checked { background: var(--accent); }
 .switch input:checked::after { transform: translateX(20px); }
 #pop-settings { top: calc(env(safe-area-inset-top, 0px) + 72px); right: max(16px, env(safe-area-inset-right, 0px)); width: 380px; }
-#pop-speed { bottom: calc(env(safe-area-inset-bottom, 0px) + 118px); left: max(16px, env(safe-area-inset-left, 0px)); min-width: 0; }
+#pop-speed { top: calc(env(safe-area-inset-top, 0px) + 72px); right: max(16px, env(safe-area-inset-right, 0px)); min-width: 0; }
 
 .hint {
   position: absolute; top: 50%; transform: translateY(-50%); pointer-events: none;
@@ -419,8 +432,9 @@ dialog.sheet::backdrop { background: rgba(10, 6, 14, .66); -webkit-backdrop-filt
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="title" id="p-title"></div>
-        <button class="chip ctl" id="btn-list" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.4" fill="currentColor"/><circle cx="4.5" cy="12" r="1.4" fill="currentColor"/><circle cx="4.5" cy="18" r="1.4" fill="currentColor"/></svg>字幕列表</button>
-        <button class="chip ctl" id="btn-fs" hidden>全屏</button>
+        <button class="chip ctl speed" id="btn-speed" aria-label="播放速度">1×</button>
+        <button class="chip ctl" id="btn-submode">双语</button>
+        <button class="round ctl" id="btn-list" aria-label="字幕列表" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.4" fill="currentColor"/><circle cx="4.5" cy="12" r="1.4" fill="currentColor"/><circle cx="4.5" cy="18" r="1.4" fill="currentColor"/></svg></button>
         <button class="round ctl" id="btn-settings" aria-label="设置">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="8" cy="17" r="2.4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>
         </button>
@@ -431,15 +445,9 @@ dialog.sheet::backdrop { background: rgba(10, 6, 14, .66); -webkit-backdrop-filt
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.2-5.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 4v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="lbl" id="lbl-back10">10</span>
         </button>
-        <button class="round ctl" id="btn-prev" aria-label="上一句">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M18 5.5v13L9.5 12z" fill="currentColor"/></svg>
-        </button>
         <button class="round big ctl" id="btn-play" aria-label="播放">
           <svg viewBox="0 0 24 24" aria-hidden="true" id="ic-play"><path d="M8 5.2v13.6L19 12z" fill="currentColor"/></svg>
           <svg viewBox="0 0 24 24" aria-hidden="true" id="ic-pause" hidden><rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></svg>
-        </button>
-        <button class="round ctl" id="btn-next" aria-label="下一句">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M6 5.5v13l8.5-6.5z" fill="currentColor"/></svg>
         </button>
         <button class="round ctl seekbtn" id="btn-fwd10" aria-label="前进">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.2-5.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -454,14 +462,16 @@ dialog.sheet::backdrop { background: rgba(10, 6, 14, .66); -webkit-backdrop-filt
             <div class="track"><div class="buf" id="s-buf"></div><div class="fill" id="s-fill"></div></div>
             <div class="knob" id="s-knob"></div>
           </div>
-          <span id="t-dur">0:00</span>
+          <button class="time ctl" id="t-dur" aria-label="切换剩余时间和总时长">0:00</button>
+          <button class="round ctl fs" id="btn-fs" aria-label="全屏" hidden></button>
         </div>
-        <div class="tools">
-          <button class="chip ctl speed" id="btn-speed">1×</button>
-          <button class="chip ctl" id="btn-submode">字幕：双语</button>
-          <button class="chip ctl" id="btn-blind" aria-pressed="false">遮挡字幕</button>
+        <div class="sentbar" id="sentbar">
+          <button class="chip ctl" id="btn-prev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>上一句</button>
+          <span class="sent-no" id="sent-no"></span>
+          <button class="chip ctl" id="btn-next">下一句<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <span class="sep" aria-hidden="true"></span>
           <button class="chip ctl" id="btn-loop" aria-pressed="false">单句循环</button>
-          <span class="grow"></span>
+          <button class="chip ctl" id="btn-blind" aria-pressed="false">遮挡字幕</button>
         </div>
       </div>
 
@@ -617,7 +627,7 @@ const DB = {
 };
 
 // ---------- settings ----------
-const DEFAULT_PREFS = { size: 'm', step: 10, autoNext: true, subMode: 'both', speeds: {}, mask: {} };
+const DEFAULT_PREFS = { size: 'm', step: 10, autoNext: true, subMode: 'both', speeds: {}, mask: {}, timeTotal: false };
 let prefs = { ...DEFAULT_PREFS };
 async function loadPrefs() {
   try { prefs = { ...DEFAULT_PREFS, ...(await DB.get('settings', 'prefs') || {}) }; } catch (e) { /* defaults */ }
@@ -1290,7 +1300,7 @@ function renderTime() {
   const d = video.duration || (P.ep && P.ep.duration) || 0;
   const t = scrubbing ? scrubbing.t : video.currentTime;
   $('#t-cur').textContent = fmt(t);
-  $('#t-dur').textContent = fmt(d);
+  $('#t-dur').textContent = prefs.timeTotal || !d ? fmt(d) : '−' + fmt(Math.max(0, d - t));
   const p = d ? clamp(t / d, 0, 1) * 100 : 0;
   $('#s-fill').style.width = p + '%';
   $('#s-knob').style.left = p + '%';
@@ -1336,6 +1346,7 @@ function renderSub(force) {
   el.classList.toggle('blind', !!P.blind);
   el.classList.toggle('revealed', !!P.blind && act.includes(P.blindReveal));
 
+  renderSentNo(t);
   // transcript highlight follows the most recent cue that has started
   const cur = act.length ? act[act.length - 1] : -1;
   if (cur !== P.activeIdx) {
@@ -1350,6 +1361,14 @@ function renderSub(force) {
       }
     }
   }
+}
+
+function renderSentNo(t) {
+  const n = P.cues.length;
+  const i = P.loop ? P.loop.i : (n ? lastStartBefore(t + .05) : -1);
+  const html = n ? `第 <b>${i >= 0 ? i + 1 : '–'}</b> / ${n} 句` : '';
+  const el = $('#sent-no');
+  if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; }
 }
 
 function startTick() {
@@ -1380,7 +1399,8 @@ function renderTools() {
   if (P.cues.length && !avail.some(([m]) => m === mode)) mode = avail[0][0];
   const label = (MODES.find(([m]) => m === mode) || MODES[1])[1];
   const sm = $('#btn-submode');
-  sm.textContent = P.cues.length ? `字幕：${label}` : '没有字幕';
+  sm.textContent = P.cues.length ? (mode === 'off' ? '字幕关' : label) : '没有字幕';
+  sm.setAttribute('aria-label', P.cues.length ? `字幕显示：${label}` : '没有字幕');
   sm.disabled = !P.cues.length;
   sm.dataset.mode = mode;
   if (mode !== prefs.subMode && P.cues.length) { prefs.subMode = mode; }
@@ -1389,12 +1409,20 @@ function renderTools() {
   $('#btn-loop').setAttribute('aria-pressed', !!P.loop);
   $('#btn-loop').innerHTML = IC.loop + (P.loop ? '循环这一句中' : '单句循环');
   $('#btn-loop').disabled = !P.cues.length;
-  $('#btn-prev').disabled = $('#btn-next').disabled = !P.cues.length;
+  $('#sentbar').hidden = !P.cues.length;
   $('#btn-speed').textContent = `${video.playbackRate}×`;
   $('#lbl-back10').textContent = $('#lbl-fwd10').textContent = prefs.step;
   $('#btn-list').setAttribute('aria-pressed', !$('#transcript').hidden);
   $('#btn-fs').hidden = !canFullscreen();
   renderFsButton();
+  renderTime(); renderSentNo(video.currentTime); measureChrome();
+}
+// How far subtitles must rise to clear the bottom controls when they show.
+function measureChrome() {
+  const tl = $('.chrome .timeline');
+  if (!tl || $('#view-player').hidden) return;
+  const h = stage.getBoundingClientRect().bottom - tl.getBoundingClientRect().top + 6;
+  if (h > 0) stage.style.setProperty('--chrome-h', Math.round(h) + 'px');
 }
 function renderSettings() {
   $$('#size-seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.size === prefs.size));
@@ -1421,7 +1449,7 @@ function positionMask() {
   Object.assign(m.style, { left: left + 'px', width: pw + 'px', top: (top + ph - band) + 'px', height: band + 'px' });
   stage.style.setProperty('--sub-bottom', Math.max(H - top - ph + band * .12, 8) + 'px');
 }
-new ResizeObserver(() => positionMask()).observe(stage);
+new ResizeObserver(() => { positionMask(); measureChrome(); }).observe(stage);
 
 // ---------- chrome (controls overlay) ----------
 function showChrome(autoHide = true) {
@@ -1439,6 +1467,10 @@ function togglePop(id) {
   const el = $(id), open = el.hidden;
   closePops();
   el.hidden = !open;
+  if (open && id === '#pop-speed') {
+    const b = $('#btn-speed').getBoundingClientRect(), r = stage.getBoundingClientRect();
+    el.style.right = Math.max(16, r.right - b.right - 40) + 'px';
+  }
   if (open) { renderSettings(); showChrome(false); } else scheduleChromeHide();
 }
 function closePops() { $('#pop-speed').hidden = true; $('#pop-settings').hidden = true; }
@@ -1563,8 +1595,8 @@ function nativeFullscreen() {
 }
 function renderFsButton() {
   const b = $('#btn-fs'), on = !!fsElement();
-  b.innerHTML = (on ? IC.fsExit : IC.fs) + (on ? '退出全屏' : '全屏');
-  b.setAttribute('aria-pressed', on);
+  b.innerHTML = on ? IC.fsExit : IC.fs;
+  b.setAttribute('aria-label', on ? '退出全屏' : '全屏');
 }
 ['fullscreenchange', 'webkitfullscreenchange'].forEach(t => document.addEventListener(t, () => { renderFsButton(); positionMask(); }));
 video.addEventListener('webkitendfullscreen', () => {
@@ -1699,6 +1731,7 @@ on('#btn-blind', 'click', ctl(toggleBlind));
 on('#btn-list', 'click', ctl(toggleTranscript));
 on('#btn-list-close', 'click', toggleTranscript);
 on('#btn-fs', 'click', ctl(toggleFullscreen));
+on('#t-dur', 'click', ctl(() => { prefs.timeTotal = !prefs.timeTotal; savePrefs(); renderTime(); }));
 on('#btn-speed', 'click', e => { e.stopPropagation(); togglePop('#pop-speed'); });
 on('#btn-settings', 'click', e => { e.stopPropagation(); togglePop('#pop-settings'); });
 on('#speed-seg', 'click', e => { const b = e.target.closest('[data-speed]'); if (b) setSpeed(+b.dataset.speed); });

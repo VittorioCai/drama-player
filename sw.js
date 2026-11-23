@@ -1,5 +1,5 @@
 // Offline cache for the app shell only. Videos live in OPFS / IndexedDB and never pass through here.
-const CACHE = 'drama-player-v4';
+const CACHE = 'drama-player-v5';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

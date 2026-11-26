@@ -33,7 +33,8 @@ convert_one() {
   if [[ "$acodec" == "aac" ]]; then aargs=(-c:a copy); else aargs=(-c:a aac -b:a 160k -ac 2); fi
 
   echo "转换：$(basename "$in")  （视频 $vcodec → ${vargs[1]}，音频 ${acodec:-无} → ${aargs[1]}）"
-  if ffmpeg -nostdin -hide_banner -loglevel error -stats -y -i "$in" "${limit[@]}" \
+  # ${limit[@]+...}: macOS bash 3.2 treats an empty array as unbound under set -u
+  if ffmpeg -nostdin -hide_banner -loglevel error -stats -y -i "$in" ${limit[@]+"${limit[@]}"} \
        -map 0:v:0 -map '0:a:0?' "${vargs[@]}" "${aargs[@]}" -movflags +faststart "$base.part.mp4"; then
     mv "$base.part.mp4" "$out"; ok=$((ok + 1))
   else
